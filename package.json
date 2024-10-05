@@ -1,0 +1,9 @@
+{
+  "name": "qm",
+  "version": "1.0.0",
+  "scripts": {},
+  "keywords": [],
+  "author": "Bersenev Vladislav",
+  "license": "ISC",
+  "description": "Chess Engine"
+}
