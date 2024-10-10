@@ -1,4 +1,4 @@
-import Engine from './core/engine'
+import Engine from './src/core/engine'
 
 export function findBestMoveFromFen (config: string | object, level = 2) {
     if (!config) {
