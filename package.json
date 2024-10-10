@@ -5,5 +5,8 @@
   "keywords": [],
   "author": "Bersenev Vladislav",
   "license": "ISC",
-  "description": "Chess Engine"
+  "description": "Chess Engine",
+  "dependencies": {
+    "@types/node": "^22.7.5"
+  }
 }
