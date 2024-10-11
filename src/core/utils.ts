@@ -1,7 +1,7 @@
-import { COLUMNS, ROWS, COLORS, PIECES } from './const'
+import { COLUMNS, ROWS, COLORS, PIECES, piecesScore } from './const'
 
 export function getPieceValue (piece: string) {
-    const values: Record<string, number> = { k: 10, q: 9, r: 5, b: 3, n: 3, p: 1 }
+    const values: Record<string, number> = piecesScore
     return values[piece.toLowerCase()] || 0
 }
 

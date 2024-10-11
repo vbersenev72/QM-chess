@@ -768,21 +768,21 @@ export default class Engine {
             level++
         }
         const scoreTable: Record<string, string | number>[] = []
-        const initialScore = this.evaluateBoard(this.getPlayingColor())
+        const initialScore = this.calculateScore(this.getPlayingColor())
         const moves = this.getMoves()
         for (const from in moves) {
-            moves[from].map(to => {
-                const testBoard = this.getTestBoard()
-                const wasScoreChanged = Boolean(testBoard.getPiece(to))
-                testBoard.move(from, to)
-                scoreTable.push({
-                    from,
-                    to,
-                    score: testBoard.testMoveScores(this.getPlayingColor(), level, wasScoreChanged, wasScoreChanged ? testBoard.evaluateBoard(this.getPlayingColor()) : initialScore, to).score +
-                        testBoard.evaluateBoardByPiecesLocation(this.getPlayingColor()) +
-                        (Math.floor(Math.random() * (this.configuration.halfMove > 10 ? this.configuration.halfMove - 10 : 1) * 10) / 10),
+                moves[from].map(to => {
+                    const testBoard = this.getTestBoard()
+                    const wasScoreChanged = Boolean(testBoard.getPiece(to))
+                    testBoard.move(from, to)
+                    scoreTable.push({
+                        from,
+                        to,
+                        score: testBoard.minimax(this.getPlayingColor(), level, wasScoreChanged, wasScoreChanged ? testBoard.calculateScore(this.getPlayingColor()) : initialScore, to).score +
+                            testBoard.calculateScoreByPiecesLocation(this.getPlayingColor()) +
+                            (Math.floor(Math.random() * (this.configuration.halfMove > 10 ? this.configuration.halfMove - 10 : 1) * 10) / 10),
+                    })
                 })
-            })
         }
 
         scoreTable.sort((previous, next) => {
@@ -814,99 +814,172 @@ export default class Engine {
         return new Engine(testConfiguration)
     }
 
-    testMoveScores (playingPlayerColor: string, level: number, capture: boolean, initialScore: number, move: string, depth = 1) { //  minimax
-        let nextMoves = null
+    minimax(playingPlayerColor: string, level: number, capture: boolean, initialScore: number, move: string, depth = 1, alpha = SCORE.MIN, beta = SCORE.MAX) {
+        let nextMoves = null;
         if (depth < AI_DEPTH_BY_LEVEL.EXTENDED[level] && this.hasPlayingPlayerCheck()) {
-            nextMoves = this.getMoves(this.getPlayingColor())
+            nextMoves = this.getMoves(this.getPlayingColor());
         } else if (depth < AI_DEPTH_BY_LEVEL.BASE[level] || (capture && depth < AI_DEPTH_BY_LEVEL.EXTENDED[level])) {
-            nextMoves = this.getMoves(this.getPlayingColor(), 5)
+            nextMoves = this.getMoves(this.getPlayingColor(), 5);
         }
-
+    
         if (this.configuration.isFinished) {
             return {
-                score: this.evaluateBoard(playingPlayerColor) + (this.getPlayingColor() === playingPlayerColor ? depth : -depth),
+                score: this.calculateScore(playingPlayerColor) + (this.getPlayingColor() === playingPlayerColor ? depth : -depth),
                 max: true,
-            }
+            };
         }
-
+    
         if (!nextMoves) {
-            if (initialScore !== null) return { score: initialScore, max: false }
-            const score = this.evaluateBoard(playingPlayerColor)
+            if (initialScore !== null) return { score: initialScore, max: false };
+            const score = this.calculateScore(playingPlayerColor);
             return {
                 score,
                 max: false,
-            }
+            };
         }
-
-        let bestScore = this.getPlayingColor() === playingPlayerColor ? SCORE.MIN : SCORE.MAX
-        let maxValueReached = false
+    
+        let bestScore = this.getPlayingColor() === playingPlayerColor ? SCORE.MIN : SCORE.MAX;
+        let maxValueReached = false;
+    
         for (const from in nextMoves) {
-            if (maxValueReached) continue
+            if (maxValueReached) continue;
+    
             nextMoves[from].map(to => {
-                if (maxValueReached) return
-                const testBoard = this.getTestBoard()
-                const wasScoreChanged = Boolean(testBoard.getPiece(to))
-                testBoard.move(from, to)
-                if (testBoard.hasNonPlayingPlayerCheck()) return
-                const result = testBoard.testMoveScores(playingPlayerColor, level, wasScoreChanged, wasScoreChanged ? testBoard.evaluateBoard(playingPlayerColor) : initialScore, to, depth + 1)
+                if (maxValueReached) return;
+                const testBoard = this.getTestBoard();
+                const wasScoreChanged = Boolean(testBoard.getPiece(to));
+                testBoard.move(from, to);
+                if (testBoard.hasNonPlayingPlayerCheck()) return;
+                const result = testBoard.minimax(playingPlayerColor, level, wasScoreChanged, wasScoreChanged ? testBoard.calculateScore(playingPlayerColor) : initialScore, to, depth + 1, alpha, beta);
+                
                 if (result.max) {
-                    maxValueReached = true
+                    maxValueReached = true;
                 }
+    
                 if (this.getPlayingColor() === playingPlayerColor) {
-                    bestScore = Math.max(bestScore, result.score)
+                    bestScore = Math.max(bestScore, result.score);
+                    alpha = Math.max(alpha, bestScore); // Обновляем альфа
                 } else {
-                    bestScore = Math.min(bestScore, result.score)
+                    bestScore = Math.min(bestScore, result.score);
+                    beta = Math.min(beta, bestScore); // Обновляем бета
                 }
-            })
+    
+                // Альфа-бета отсечение
+                if (beta <= alpha) {
+                    maxValueReached = true; // Отсекаем дальнейшие ходы
+                    return; // Выходим из текущего цикла
+                }
+            });
         }
-
-        return { score: bestScore, max: false }
+    
+        return { score: bestScore, max: false };
     }
 
-    evaluateBoardByPiecesLocation (player = this.getPlayingColor()) {
-        const columnMapping: { [key: string]: number } = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7 };
-        const scoreMultiplier = 0.5
-        let score = 0
+    calculateScoreByPiecesLocation(player = this.getPlayingColor()) {
+        const columnMapping: Record<string, string | number> = { A: 0, B: 1, C: 2, D: 3, E: 4, F: 5, G: 6, H: 7 };
+        const scoreMultiplier = 0.5;
+        let score = 0;
+    
+        // Бонусы за контроль центра (D4, D5, E4, E5)
+        const centralPositions = ["D4", "D5", "E4", "E5"];
+        const centerControlBonus = 1; // Бонус за контроль центра
+    
+        // Оценка развития фигур (например, ранние ходы пешками)
+        const developmentBonus = 0.5;
+    
         for (const location in this.configuration.pieces) {
-            const piece = this.getPiece(location)
+            const piece = this.getPiece(location);
+            const pieceColor = this.getPieceColor(piece);
+    
             if (scoreByPosition[piece]) {
                 const rowIndex = location[1] ? Number(location[1]) - 1 : -1;
-                const columnIndex = columnMapping[location[0]]; // Get the column index
-                const scoreIndex = scoreByPosition[piece][rowIndex][columnIndex]
-                score += (this.getPieceColor(piece) === player ? scoreIndex : -scoreIndex) * scoreMultiplier
+                const columnIndex = columnMapping[location[0]];
+                const scoreIndex = scoreByPosition[piece][rowIndex][columnIndex];
+    
+                // Основная оценка позиции
+                const pieceScore = (pieceColor === player ? scoreIndex : -scoreIndex) * scoreMultiplier;
+                score += pieceScore;
+    
+                // Бонус за контроль центра
+                if (centralPositions.includes(location)) {
+                    score += (pieceColor === player ? centerControlBonus : -centerControlBonus);
+                }
+    
+                // Бонусы за развитие фигур (например, если фигуры находятся на второй/третьей линии)
+                if (piece.type === 'P' && ((pieceColor === 'white' && location[1] > '2') || (pieceColor === 'black' && location[1] < '7'))) {
+                    score += (pieceColor === player ? developmentBonus : -developmentBonus);
+                } else if (piece.type !== 'P' && (location[1] > '2' && location[1] < '7')) {
+                    score += (pieceColor === player ? developmentBonus : -developmentBonus);
+                }
             }
         }
-        return score
+    
+        return score;
     }
 
-    evaluateBoard (playerColor = this.getPlayingColor()) {
-        let scoreIndex = 0
-
+    calculateScore(playerColor = this.getPlayingColor()) {
+        let scoreIndex = 0;
+    
+        // Проверка на мат
         if (this.configuration.checkMate) {
-            if (this.getPlayingColor() === playerColor) {
-                return SCORE.MIN
-            } else {
-                return SCORE.MAX
-            }
+            return this.getPlayingColor() === playerColor ? SCORE.MIN : SCORE.MAX;
         }
-
+    
+        // Проверка на ничью
         if (this.configuration.isFinished) {
-            if (this.getPlayingColor() === playerColor) {
-                return SCORE.MAX
-            } else {
-                return SCORE.MIN
-            }
+            return this.getPlayingColor() === playerColor ? SCORE.MAX : SCORE.MIN;
         }
-
+    
+        // Оценка значимости фигур и бонусы за контроль центра и безопасность короля
         for (const location in this.configuration.pieces) {
-            const piece = this.getPiece(location)
-            if (this.getPieceColor(piece) === playerColor) {
-                scoreIndex += getPieceValue(piece) * PIECE_VALUE_MULTIPLIER
-            } else {
-                scoreIndex -= getPieceValue(piece) * PIECE_VALUE_MULTIPLIER
+            const piece = this.getPiece(location);
+            const pieceColor = this.getPieceColor(piece);
+            
+            // Оценка базовой стоимости фигуры
+            const pieceValue = getPieceValue(piece) * PIECE_VALUE_MULTIPLIER;
+            scoreIndex += pieceColor === playerColor ? pieceValue : -pieceValue;
+    
+            // Бонус за контроль центра
+            const centralControlBonus = this.evaluateCentralControl(location, pieceColor);
+            scoreIndex += centralControlBonus;
+    
+            // Оценка безопасности короля
+            if (piece.type === 'K') {
+                const kingSafetyScore = this.evaluateKingSafety(pieceColor);
+                scoreIndex += kingSafetyScore;
             }
         }
-
-        return scoreIndex
+    
+        return scoreIndex;
+    }
+    
+    // Вспомогательная функция для оценки контроля центра
+    evaluateCentralControl(location: string, pieceColor: string) {
+        const centralPositions = ["D4", "D5", "E4", "E5"];
+        return centralPositions.includes(location) ? (pieceColor === this.getPlayingColor() ? 1 : -1) : 0;
+    }
+    
+    // Вспомогательная функция для оценки безопасности короля
+    evaluateKingSafety(playerColor: string) {
+        const threats = this.getThreatsToKing();
+        if (threats.length > 0) {
+            return playerColor === this.getPlayingColor() ? -threats.length * 5 : threats.length * 5;
+        }
+        return playerColor === this.getPlayingColor() ? 10 : -10; // Бонус за безопасность
+    }
+    
+    // Вспомогательная функция для получения угроз для короля
+    getThreatsToKing() {
+        const threats = [];
+        // Логика для поиска угроз к королю
+        for (const location in this.configuration.pieces) {
+            const piece = this.getPiece(location);
+            const pieceColor = this.getPieceColor(piece);
+            
+            if (pieceColor !== this.getPlayingColor() && this.getAttackingFields(this.getPlayingColor())) {
+                threats.push(location); // Добавляем угрозу в список
+            }
+        }
+        return threats;
     }
 }

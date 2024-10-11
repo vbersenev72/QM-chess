@@ -7,5 +7,5 @@ export function findBestMoveFromFen (config: string | object, level = 2) {
     const engine = new Engine(config)
     const move = engine.findBestMove(level)
 
-    return { [move.from]: move.to }
+    return move
 }
