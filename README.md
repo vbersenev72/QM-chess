@@ -15,7 +15,7 @@ console.log(bestMove); // { E2: 'E4' } || { D2: 'D4' }.  This confrontation will
 
 
 ## TODO
+- refactoring calculateScore algorithm
 - add multithreading
 - FEN validation (using "zod")
-- switch "minimax" algorithm to "negamax"
 - UNIT tests by mocha + sinon

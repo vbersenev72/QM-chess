@@ -778,7 +778,7 @@ export default class Engine {
                     scoreTable.push({
                         from,
                         to,
-                        score: testBoard.minimax(this.getPlayingColor(), level, wasScoreChanged, wasScoreChanged ? testBoard.calculateScore(this.getPlayingColor()) : initialScore, to).score +
+                        score: testBoard.negamax(this.getPlayingColor(), level, wasScoreChanged, wasScoreChanged ? testBoard.calculateScore(this.getPlayingColor()) : initialScore, to).score +
                             testBoard.calculateScoreByPiecesLocation(this.getPlayingColor()) +
                             (Math.floor(Math.random() * (this.configuration.halfMove > 10 ? this.configuration.halfMove - 10 : 1) * 10) / 10),
                     })
@@ -814,14 +814,17 @@ export default class Engine {
         return new Engine(testConfiguration)
     }
 
-    minimax(playingPlayerColor: string, level: number, capture: boolean, initialScore: number, move: string, depth = 1, alpha = SCORE.MIN, beta = SCORE.MAX) {
+    negamax(playingPlayerColor: string, level: number, capture: boolean, initialScore: number, move: string, depth = 1, alpha = SCORE.MIN, beta = SCORE.MAX) {
         let nextMoves = null;
+    
+        // Получаем возможные ходы в зависимости от уровня и состояния игры
         if (depth < AI_DEPTH_BY_LEVEL.EXTENDED[level] && this.hasPlayingPlayerCheck()) {
             nextMoves = this.getMoves(this.getPlayingColor());
         } else if (depth < AI_DEPTH_BY_LEVEL.BASE[level] || (capture && depth < AI_DEPTH_BY_LEVEL.EXTENDED[level])) {
             nextMoves = this.getMoves(this.getPlayingColor(), 5);
         }
     
+        // Проверка окончания игры
         if (this.configuration.isFinished) {
             return {
                 score: this.calculateScore(playingPlayerColor) + (this.getPlayingColor() === playingPlayerColor ? depth : -depth),
@@ -829,6 +832,7 @@ export default class Engine {
             };
         }
     
+        // Если нет доступных ходов
         if (!nextMoves) {
             if (initialScore !== null) return { score: initialScore, max: false };
             const score = this.calculateScore(playingPlayerColor);
@@ -838,34 +842,30 @@ export default class Engine {
             };
         }
     
-        let bestScore = this.getPlayingColor() === playingPlayerColor ? SCORE.MIN : SCORE.MAX;
+        let bestScore = SCORE.MIN; // Начинаем с минимального значения
         let maxValueReached = false;
     
         for (const from in nextMoves) {
             if (maxValueReached) continue;
     
-            nextMoves[from].map(to => {
+            nextMoves[from].forEach(to => {
                 if (maxValueReached) return;
+    
                 const testBoard = this.getTestBoard();
                 const wasScoreChanged = Boolean(testBoard.getPiece(to));
                 testBoard.move(from, to);
                 if (testBoard.hasNonPlayingPlayerCheck()) return;
-                const result = testBoard.minimax(playingPlayerColor, level, wasScoreChanged, wasScoreChanged ? testBoard.calculateScore(playingPlayerColor) : initialScore, to, depth + 1, alpha, beta);
-                
-                if (result.max) {
-                    maxValueReached = true;
-                }
     
-                if (this.getPlayingColor() === playingPlayerColor) {
-                    bestScore = Math.max(bestScore, result.score);
-                    alpha = Math.max(alpha, bestScore); // Обновляем альфа
-                } else {
-                    bestScore = Math.min(bestScore, result.score);
-                    beta = Math.min(beta, bestScore); // Обновляем бета
-                }
+                // Рекурсивный вызов negamax для следующего уровня
+                const result = testBoard.negamax(playingPlayerColor, level, wasScoreChanged, wasScoreChanged ? testBoard.calculateScore(playingPlayerColor) : initialScore, to, depth + 1, -beta, -alpha);
+    
+                const score = -result.score; // Переворачиваем знак
+    
+                bestScore = Math.max(bestScore, score); // Обновляем лучшее значение
+                alpha = Math.max(alpha, score); // Обновляем альфа
     
                 // Альфа-бета отсечение
-                if (beta <= alpha) {
+                if (alpha >= beta) {
                     maxValueReached = true; // Отсекаем дальнейшие ходы
                     return; // Выходим из текущего цикла
                 }
